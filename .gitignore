@@ -1,0 +1,15 @@
+# Local Android / Gradle files
+.gradle/
+**/.gradle/
+**/build/
+local.properties
+*.log
+*.zip
+# Never commit signing material or personal backups
+*.jks
+*.keystore
+signing.properties
+*-backup*.json
+# OS files
+.DS_Store
+__pycache__/

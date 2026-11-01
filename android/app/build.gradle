@@ -1,0 +1,36 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'ir.roozeman.planner'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'ir.roozeman.planner'
+        minSdk 26
+        targetSdk 34
+        versionCode 8
+        versionName '8.0'
+    }
+
+    // Optional stable signing for classmates and upgrades. No keys are committed.
+    signingConfigs {
+        if (System.getenv('ROOZ_SIGNING_STORE_FILE') && System.getenv('ROOZ_SIGNING_STORE_PASSWORD') &&
+            System.getenv('ROOZ_SIGNING_KEY_ALIAS') && System.getenv('ROOZ_SIGNING_KEY_PASSWORD')) {
+            roozRelease {
+                storeFile file(System.getenv('ROOZ_SIGNING_STORE_FILE'))
+                storePassword System.getenv('ROOZ_SIGNING_STORE_PASSWORD')
+                keyAlias System.getenv('ROOZ_SIGNING_KEY_ALIAS')
+                keyPassword System.getenv('ROOZ_SIGNING_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (signingConfigs.findByName('roozRelease') != null)
+                signingConfig signingConfigs.getByName('roozRelease')
+        }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    sourceSets { main.assets.srcDirs = ['src/main/assets'] }
+}

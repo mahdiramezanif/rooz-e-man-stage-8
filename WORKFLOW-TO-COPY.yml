@@ -1,0 +1,100 @@
+name: Build Rooz-e-Man Android APK
+
+on:
+  workflow_dispatch:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Android APK (debug)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify repository layout
+        shell: bash
+        run: |
+          test -f android/settings.gradle || { echo 'ERROR: android/settings.gradle must be in repository root/android'; exit 1; }
+          test -f android/app/build.gradle || { echo 'ERROR: android/app/build.gradle is missing'; exit 1; }
+          test -f android/app/src/main/assets/ui-v8.js || { echo 'ERROR: Android assets were not uploaded'; exit 1; }
+
+      - name: Set up Node for logic checks
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check JavaScript and data migration
+        shell: bash
+        run: |
+          node --check app.js
+          node --check ui-v8.js
+          node tests/check.js
+          node tests/check_diary.js
+          node tests/check_activity.js
+          node tests/check_v8.js
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+
+      - name: Install Android API 35
+        shell: bash
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Build APK
+        working-directory: android
+        shell: bash
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Publish installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: rooz-e-man-v8-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build signed release APK (optional)
+        shell: bash
+        working-directory: android
+        env:
+          ROOZ_SIGNING_BASE64: ${{ secrets.ROOZ_SIGNING_BASE64 }}
+          ROOZ_SIGNING_STORE_PASSWORD: ${{ secrets.ROOZ_SIGNING_STORE_PASSWORD }}
+          ROOZ_SIGNING_KEY_ALIAS: ${{ secrets.ROOZ_SIGNING_KEY_ALIAS }}
+          ROOZ_SIGNING_KEY_PASSWORD: ${{ secrets.ROOZ_SIGNING_KEY_PASSWORD }}
+        run: |
+          if [[ -z "$ROOZ_SIGNING_BASE64" || -z "$ROOZ_SIGNING_STORE_PASSWORD" || -z "$ROOZ_SIGNING_KEY_ALIAS" || -z "$ROOZ_SIGNING_KEY_PASSWORD" ]]; then
+            echo 'Optional release signing not configured; debug APK was already built.'
+            exit 0
+          fi
+          umask 077
+          mkdir -p signing
+          printf '%s' "$ROOZ_SIGNING_BASE64" | base64 --decode > signing/release.jks
+          export ROOZ_SIGNING_STORE_FILE="$PWD/signing/release.jks"
+          gradle --no-daemon :app:assembleRelease
+          echo 'ROOZ_RELEASE_BUILT=true' >> "$GITHUB_ENV"
+
+      - name: Publish signed release APK
+        if: ${{ env.ROOZ_RELEASE_BUILT == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rooz-e-man-v8-signed-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
